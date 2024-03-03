@@ -1,0 +1,411 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index 44fd07c..26e068d 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -31,6 +31,7 @@ dependencies = [
+  "rand",
+  "rlsf",
+  "slab_allocator",
++ "talc",
+ ]
+ 
+ [[package]]
+@@ -1792,6 +1793,12 @@ dependencies = [
+  "unicode-ident",
+ ]
+ 
++[[package]]
++name = "talc"
++version = "4.3.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "5244db9f91c0b033fa05c16e349ccdb0a3225198a5a71dbeacd36696e08d940b"
++
+ [[package]]
+ name = "thiserror"
+ version = "1.0.47"
+diff --git a/api/axfeat/Cargo.toml b/api/axfeat/Cargo.toml
+index 2947a7e..8c46c22 100644
+--- a/api/axfeat/Cargo.toml
++++ b/api/axfeat/Cargo.toml
+@@ -26,6 +26,7 @@ alloc = ["axalloc", "axruntime/alloc"]
+ alloc-tlsf = ["axalloc/tlsf"]
+ alloc-slab = ["axalloc/slab"]
+ alloc-buddy = ["axalloc/buddy"]
++alloc-new = ["axalloc/new"]
+ paging = ["alloc", "axhal/paging", "axruntime/paging"]
+ tls = ["alloc", "axhal/tls", "axruntime/tls", "axtask?/tls"]
+ 
+diff --git a/apps/memtest/src/main.rs b/apps/memtest/src/main.rs
+index e23e95e..c05bc5c 100644
+--- a/apps/memtest/src/main.rs
++++ b/apps/memtest/src/main.rs
+@@ -6,7 +6,7 @@
+ extern crate axstd as std;
+ 
+ use rand::{rngs::SmallRng, RngCore, SeedableRng};
+-use std::collections::BTreeMap;
++use std::collections::HashMap;
+ use std::vec::Vec;
+ 
+ fn test_vec(rng: &mut impl RngCore) {
+@@ -22,9 +22,9 @@ fn test_vec(rng: &mut impl RngCore) {
+     println!("test_vec() OK!");
+ }
+ 
+-fn test_btree_map(rng: &mut impl RngCore) {
++fn test_hashmap_map(rng: &mut impl RngCore) {
+     const N: usize = 50_000;
+-    let mut m = BTreeMap::new();
++    let mut m = HashMap::new();
+     for _ in 0..N {
+         let value = rng.next_u32();
+         let key = format!("key_{value}");
+@@ -35,7 +35,7 @@ fn test_btree_map(rng: &mut impl RngCore) {
+             assert_eq!(k.parse::<u32>().unwrap(), *v);
+         }
+     }
+-    println!("test_btree_map() OK!");
++    println!("test_hashmap_map() OK!");
+ }
+ 
+ #[cfg_attr(feature = "axstd", no_mangle)]
+@@ -44,7 +44,7 @@ fn main() {
+ 
+     let mut rng = SmallRng::seed_from_u64(0xdead_beef);
+     test_vec(&mut rng);
+-    test_btree_map(&mut rng);
++    test_hashmap_map(&mut rng);
+ 
+     println!("Memory tests run OK!");
+ }
+diff --git a/aqoursoro-lesson1.patch b/aqoursoro-lesson1.patch
+new file mode 100644
+index 0000000..ee644e3
+--- /dev/null
++++ b/aqoursoro-lesson1.patch
+@@ -0,0 +1,62 @@
++diff --git a/apps/memtest/src/main.rs b/apps/memtest/src/main.rs
++index e23e95e..c05bc5c 100644
++--- a/apps/memtest/src/main.rs
+++++ b/apps/memtest/src/main.rs
++@@ -6,7 +6,7 @@
++ extern crate axstd as std;
++ 
++ use rand::{rngs::SmallRng, RngCore, SeedableRng};
++-use std::collections::BTreeMap;
+++use std::collections::HashMap;
++ use std::vec::Vec;
++ 
++ fn test_vec(rng: &mut impl RngCore) {
++@@ -22,9 +22,9 @@ fn test_vec(rng: &mut impl RngCore) {
++     println!("test_vec() OK!");
++ }
++ 
++-fn test_btree_map(rng: &mut impl RngCore) {
+++fn test_hashmap_map(rng: &mut impl RngCore) {
++     const N: usize = 50_000;
++-    let mut m = BTreeMap::new();
+++    let mut m = HashMap::new();
++     for _ in 0..N {
++         let value = rng.next_u32();
++         let key = format!("key_{value}");
++@@ -35,7 +35,7 @@ fn test_btree_map(rng: &mut impl RngCore) {
++             assert_eq!(k.parse::<u32>().unwrap(), *v);
++         }
++     }
++-    println!("test_btree_map() OK!");
+++    println!("test_hashmap_map() OK!");
++ }
++ 
++ #[cfg_attr(feature = "axstd", no_mangle)]
++@@ -44,7 +44,7 @@ fn main() {
++ 
++     let mut rng = SmallRng::seed_from_u64(0xdead_beef);
++     test_vec(&mut rng);
++-    test_btree_map(&mut rng);
+++    test_hashmap_map(&mut rng);
++ 
++     println!("Memory tests run OK!");
++ }
++diff --git a/ulib/axstd/src/lib.rs b/ulib/axstd/src/lib.rs
++index d256cd5..d2242d0 100644
++--- a/ulib/axstd/src/lib.rs
+++++ b/ulib/axstd/src/lib.rs
++@@ -55,7 +55,7 @@ extern crate alloc;
++ 
++ #[cfg(feature = "alloc")]
++ #[doc(no_inline)]
++-pub use alloc::{boxed, collections, format, string, vec};
+++pub use alloc::{boxed, format, string, vec};
++ 
++ #[doc(no_inline)]
++ pub use core::{arch, cell, cmp, hint, marker, mem, ops, ptr, slice, str};
++@@ -75,3 +75,5 @@ pub mod time;
++ pub mod fs;
++ #[cfg(feature = "net")]
++ pub mod net;
+++
+++pub mod collections;
+diff --git a/crates/allocator/Cargo.toml b/crates/allocator/Cargo.toml
+index b8770f1..e9c16bd 100644
+--- a/crates/allocator/Cargo.toml
++++ b/crates/allocator/Cargo.toml
+@@ -11,13 +11,14 @@ documentation = "https://rcore-os.github.io/arceos/allocator/index.html"
+ 
+ [features]
+ default = []
+-full = ["bitmap", "tlsf", "slab", "buddy", "allocator_api"]
++full = ["bitmap", "tlsf", "slab", "buddy", "allocator_api", "new"]
+ 
+ bitmap = ["dep:bitmap-allocator"]
+ 
+ tlsf = ["dep:rlsf"]
+ slab = ["dep:slab_allocator"]
+ buddy = ["dep:buddy_system_allocator"]
++new = ["dep:talc"]
+ 
+ allocator_api = []
+ 
+@@ -26,6 +27,7 @@ buddy_system_allocator = { version = "0.9", default-features = false, optional =
+ slab_allocator = { path = "../slab_allocator", optional = true }
+ rlsf = { version = "0.2", optional = true }
+ bitmap-allocator = { git = "https://github.com/rcore-os/bitmap-allocator.git", rev = "88e871a", optional = true }
++talc = { version = "4.3.1", default-features = false, optional = true }
+ 
+ [dev-dependencies]
+ allocator = { path = ".", features = ["full"] }
+diff --git a/crates/allocator/src/lib.rs b/crates/allocator/src/lib.rs
+index 7a79161..86a8473 100644
+--- a/crates/allocator/src/lib.rs
++++ b/crates/allocator/src/lib.rs
+@@ -31,6 +31,12 @@ mod tlsf;
+ #[cfg(feature = "tlsf")]
+ pub use tlsf::TlsfByteAllocator;
+ 
++#[cfg(feature = "new")]
++mod new;
++#[cfg(feature = "new")]
++pub use new::YourNewByteAllocator;
++
++
+ use core::alloc::Layout;
+ use core::ptr::NonNull;
+ 
+diff --git a/modules/axalloc/Cargo.toml b/modules/axalloc/Cargo.toml
+index 40eedf4..63472be 100644
+--- a/modules/axalloc/Cargo.toml
++++ b/modules/axalloc/Cargo.toml
+@@ -14,6 +14,7 @@ default = ["tlsf"]
+ tlsf = ["allocator/tlsf"]
+ slab = ["allocator/slab"]
+ buddy = ["allocator/buddy"]
++new = ["allocator/new"]
+ 
+ [dependencies]
+ log = "0.4"
+diff --git a/modules/axalloc/src/lib.rs b/modules/axalloc/src/lib.rs
+index 096ce95..0593b66 100644
+--- a/modules/axalloc/src/lib.rs
++++ b/modules/axalloc/src/lib.rs
+@@ -30,6 +30,8 @@ cfg_if::cfg_if! {
+         use allocator::BuddyByteAllocator as DefaultByteAllocator;
+     } else if #[cfg(feature = "tlsf")] {
+         use allocator::TlsfByteAllocator as DefaultByteAllocator;
++    } else if #[cfg(feature = "new")] {
++        use allocator::YourNewByteAllocator as DefaultByteAllocator;
+     }
+ }
+ 
+diff --git a/ulib/axstd/Cargo.toml b/ulib/axstd/Cargo.toml
+index 83239c3..35a0a1c 100644
+--- a/ulib/axstd/Cargo.toml
++++ b/ulib/axstd/Cargo.toml
+@@ -33,6 +33,7 @@ alloc = ["arceos_api/alloc", "axfeat/alloc", "axio/alloc"]
+ alloc-tlsf = ["axfeat/alloc-tlsf"]
+ alloc-slab = ["axfeat/alloc-slab"]
+ alloc-buddy = ["axfeat/alloc-buddy"]
++alloc-new = ["axfeat/alloc-new"]
+ paging = ["axfeat/paging"]
+ tls = ["axfeat/tls"]
+ 
+diff --git a/ulib/axstd/src/collections/hashmap.rs b/ulib/axstd/src/collections/hashmap.rs
+new file mode 100644
+index 0000000..1a30c55
+--- /dev/null
++++ b/ulib/axstd/src/collections/hashmap.rs
+@@ -0,0 +1,146 @@
++extern crate alloc;
++
++use core::hash::Hasher;
++use core::hash::Hash;
++
++const N: usize = 128;
++
++struct Entry<K, V> {
++    key: K,
++    value: V,
++}
++
++pub struct RandomState;
++
++
++impl Clone for RandomState {
++    fn clone(&self) -> Self {
++        RandomState
++    }
++}
++
++impl Default for RandomState {
++    fn default() -> Self {
++        RandomState
++    }
++}
++
++pub struct SimpleHasher(u64);
++
++impl core::hash::Hasher for SimpleHasher {
++    fn finish(&self) -> u64 {
++        self.0
++    }
++
++    fn write(&mut self, bytes: &[u8]) {
++        for &byte in bytes {
++            self.0 ^= u64::from(byte);
++        }
++    }
++}
++
++impl core::hash::BuildHasher for RandomState {
++    type Hasher = SimpleHasher;
++    fn build_hasher(&self) -> Self::Hasher {
++        SimpleHasher(0)
++    }
++}
++
++pub type HashMap<K, V> = HashMapWithHasher<K, V, RandomState>;
++
++pub struct HashMapWithHasher<K, V, S = RandomState> {
++    storage: [Option<Entry<K, V>>; N],
++    hash_builder: S,
++}
++
++pub struct HashMapIter<'a, K, V, S> {
++    hashmap: &'a HashMapWithHasher<K, V, S>,
++    index: usize,
++}
++
++impl<'a, K, V, S> Iterator for HashMapIter<'a, K, V, S>
++where
++    K: PartialEq,
++    S: core::hash::BuildHasher,
++{
++    type Item = (&'a K, &'a V);
++
++    fn next(&mut self) -> Option<Self::Item> {
++        while self.index < N {
++            if let Some(entry) = &self.hashmap.storage[self.index] {
++                self.index += 1;
++                return Some((&entry.key, &entry.value));
++            } else {
++                self.index += 1;
++            }
++        }
++        None
++    }
++}
++
++impl<K, V, S> HashMapWithHasher<K, V, S>
++where
++    K: PartialEq + Hash,
++    S: core::hash::BuildHasher + Default + Clone,
++{
++    const ARRAY_REPEAT_VALUE: Option<Entry<K, V>> = None;
++
++    pub fn new() -> Self {
++        HashMapWithHasher {
++            storage: [Self::ARRAY_REPEAT_VALUE; N],
++            hash_builder: S::default(),
++        }
++    }
++
++    pub fn with_hasher(hash_builder: S) -> Self {
++        HashMapWithHasher {
++            storage: [Self::ARRAY_REPEAT_VALUE; N],
++            hash_builder,
++        }
++    }
++
++    pub fn insert(&mut self, key: K, value: V) -> Option<V> {
++        let index = self.hash(&key) % N;
++        for i in 0..N {
++            let idx = (index + i) % N;
++            match &mut self.storage[idx] {
++                Some(entry) if entry.key == key => {
++                    let old_value = core::mem::replace(&mut entry.value, value);
++                    return Some(old_value);
++                }
++                None => {
++                    self.storage[idx] = Some(Entry { key, value });
++                    return None;
++                }
++                _ => continue,
++            }
++        }
++        None
++    }
++
++    pub fn get(&self, key: K) -> Option<&V> {
++        let index = self.hash(&key) % N;
++        for i in 0..N {
++            let idx = (index + i) % N;
++            match &self.storage[idx] {
++                Some(entry) if entry.key == key => return Some(&entry.value),
++                None => return None,
++                _ => continue,
++            }
++        }
++        None
++    }
++
++    fn hash(&self, key: &K) -> usize {
++        let mut hasher = self.hash_builder.build_hasher();
++        key.hash(&mut hasher);
++        hasher.finish() as usize % N
++    }
++
++    pub fn iter(&self) -> HashMapIter<K, V, S> {
++        HashMapIter {
++            hashmap: self,
++            index: 0,
++        }
++    }
++}
+\ No newline at end of file
+diff --git a/ulib/axstd/src/collections/mod.rs b/ulib/axstd/src/collections/mod.rs
+new file mode 100644
+index 0000000..1554e7f
+--- /dev/null
++++ b/ulib/axstd/src/collections/mod.rs
+@@ -0,0 +1,2 @@
++pub mod hashmap;
++pub use self::hashmap::HashMap;
+\ No newline at end of file
+diff --git a/ulib/axstd/src/lib.rs b/ulib/axstd/src/lib.rs
+index d256cd5..d2242d0 100644
+--- a/ulib/axstd/src/lib.rs
++++ b/ulib/axstd/src/lib.rs
+@@ -55,7 +55,7 @@ extern crate alloc;
+ 
+ #[cfg(feature = "alloc")]
+ #[doc(no_inline)]
+-pub use alloc::{boxed, collections, format, string, vec};
++pub use alloc::{boxed, format, string, vec};
+ 
+ #[doc(no_inline)]
+ pub use core::{arch, cell, cmp, hint, marker, mem, ops, ptr, slice, str};
+@@ -75,3 +75,5 @@ pub mod time;
+ pub mod fs;
+ #[cfg(feature = "net")]
+ pub mod net;
++
++pub mod collections;
